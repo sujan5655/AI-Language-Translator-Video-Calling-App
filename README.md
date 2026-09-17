@@ -7,6 +7,7 @@ uv add sqlalchemy
 uv add "pwdlib[argon2]"
 uv add python-jose
 uv sync
+uv add websocket-client
 
 Running the application
 uv run uvicorn src.video_calling_app.main:app --reload

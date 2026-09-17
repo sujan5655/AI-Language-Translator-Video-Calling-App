@@ -1,11 +1,13 @@
 import asyncio
-
+import os 
 from fastapi import (
     APIRouter,
     WebSocket,
     WebSocketDisconnect,
 )
-
+from jose import JWTError,jwt
+from ..models import User
+from ..database import SessionLocal
 from ..services.transcription import (
     transcribe_audio,
 )
@@ -14,11 +16,48 @@ from ..services.translation import (
     translate_to_english,
 )
 
+from ..services.tts import generate_english_speech
 
 router = APIRouter(
     tags=["Transcription"],
 )
 
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+
+
+def authenticate_websocket(token: str):
+    try:
+        payload = jwt.decode(
+            token,
+            JWT_SECRET_KEY,
+            algorithms=[ALGORITHM],
+        )
+
+        if payload.get("type") != "access":
+            return None
+
+        user_id = payload.get("sub")
+
+        if user_id is None:
+            return None
+
+        db = SessionLocal()
+
+        try:
+            user = (
+                db.query(User)
+                .filter(User.id == int(user_id))
+                .first()
+            )
+
+            return user
+
+        finally:
+            db.close()
+
+    except (JWTError, ValueError, TypeError):
+        return None
 
 @router.websocket("/ws/transcription")
 async def transcription_socket(
@@ -114,31 +153,37 @@ async def transcription_socket(
                         )
                     )
 
+                    print(
+    f"🇬🇧 English: "
+    f"{english_text}"
+)
+
+
+                    english_audio = await asyncio.to_thread(
+    generate_english_speech,
+    english_text,
+)
+
 
                     print(
-                        f"🇬🇧 English: "
-                        f"{english_text}"
-                    )
+    f"🔊 English audio generated: "
+    f"{len(english_audio)} bytes"
+)
 
-
-                    # -------------------------
-                    # 3. Send to React
-                    # -------------------------
 
                     await websocket.send_json({
+    "type": "transcript",
+    "user_id": current_user.id,
+    "username": current_user.username,
+    "original_text": original_text,
+    "language": detected_language,
+    "english_text": english_text,
+})
 
-                        "type": "transcript",
 
-                        "original_text":
-                            original_text,
-
-                        "language":
-                            detected_language,
-
-                        "english_text":
-                            english_text,
-
-                    })
+                    await websocket.send_bytes(
+    english_audio
+)
 
 
                 except Exception as error:

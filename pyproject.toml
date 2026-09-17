@@ -18,6 +18,8 @@ dependencies = [
     "python-jose>=3.5.0",
     "sqlalchemy>=2.0.54",
     "uvicorn>=0.53.0",
+    "websocket-client>=1.9.2",
+    "websockets>=17.1",
 ]
 
 [project.scripts]
